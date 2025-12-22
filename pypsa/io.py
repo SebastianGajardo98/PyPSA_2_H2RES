@@ -1841,11 +1841,48 @@ def is_default_co2_emissions(carriers_df: pd.DataFrame,fuel_type: str) -> bool:
     return False
 
 def validate_technology(carrier: str, technology: str, index: int) -> str:
-    if (technology.upper() in ENERGY_SOURCES[carrier]['technology']):
-        return technology.upper()    
-    msg: str = f'On Generator {index} technology of type {technology} is not supported as a subtype of {carrier} in H2RES model. Allowed subtypes are {ENERGY_SOURCES[carrier.capitalize()]['technology']}'
+    """
+    Validate whether the given technology belongs to the allowed list 
+    for a given carrier defined in ENERGY_SOURCES.
+
+    If the technology is missing or invalid, the function tries to infer it:
+    1. It checks if an alias defines a default technology.
+    2. Otherwise, it assigns the first available technology for that carrier.
+    """
+
+    # Delete spaces in the beginning or in the end, and uppercase everythin
+    tech_upper = str(technology).strip().upper()
+    carrier_key = carrier.capitalize()
+
+    # 1. Standard case: the technology is explicitly listed as valid
+    if tech_upper in ENERGY_SOURCES[carrier_key]['technology']:
+        return tech_upper
+
+    # 2. Missing or empty technology, try to infer from ALIASES
+    if not tech_upper or tech_upper == "":
+        aliases = ENERGY_SOURCES[carrier_key].get('aliases', [])
+        for alias in aliases:
+            if isinstance(alias, list):
+                alias_name = str(alias[0]).strip().lower()
+                alias_tech = alias[1] if len(alias) > 1 else None
+                # If an alias matches the carrier name, return its associated technology
+                if alias_name == carrier.lower() and alias_tech:
+                    return alias_tech
+
+        # No alias found, return None
+        print(
+            f"⚠️ No technology specified for Generator {index} ({carrier}), "
+            f"and no alias found. Leaving technology as None."
+        )
+        return None
+    
+    #Invalid technology, print a warning and return None
+    allowed = ENERGY_SOURCES[carrier_key]['technology']
+    msg = (
+        f"On Generator {index}, technology '{technology} is not supported as a subtype of {carrier} in the H2RES model. Allowed subtypes are {allowed}")
     print(msg)
     return None
+
 
 def get_storage_capacity(storage_data_row: pd.Series) -> float:
         capacity = storage_data_row.get('sto_capacity', pd.Series())
@@ -1903,13 +1940,27 @@ def generate_row(elements: dict) -> ET.Element:
     return row
 
 def generate_row_data(index: str, generator_row_data: pd.Series, carrier_df: pd.DataFrame, storage_unit_row_data: pd.Series) -> dict[str, str]:
+    
+    """
+    Build the XML-ready row for each generator in the PyPSA network.
+
+    This function:
+      - Validates the carrier and its technology.
+      - Infers missing technologies via aliases or defaults.
+      - Collects all numeric and operational parameters for export.
+    """
+
     technology = ''
     fuel_type = ''
-    carrier_name: str = validate_fuel_type(generator_row_data['carrier'], index)
-    if (carrier_name == None): 
-        print(f'Cannot process generator {index} because of the lacking fuel type')
-        return None
 
+    #Validate or map the carrier (includes aliases like CCGT → Gas, Onwind → Wind, etc.)
+    carrier_name: str = validate_fuel_type(generator_row_data['carrier'], index)
+    #If validation completely failed (no match or alias), skip this generator
+    if (carrier_name == None): 
+        print(f'Cannot process generator {index} because of missing fuel type')
+        return None
+    #Parse the result from validate_fuel_type:
+    #It can return either a list [carrier, technology] or just a carrier string.
     if isinstance(carrier_name, list):  
         fuel_type = carrier_name[0]
         technology = carrier_name[1]  
@@ -1917,28 +1968,31 @@ def generate_row_data(index: str, generator_row_data: pd.Series, carrier_df: pd.
         fuel_type = carrier_name
         technology = validate_technology(fuel_type, generator_row_data['technology'], index)
 
+    #Retrieve life-time, growth, costs, and emission parameters
     life_time = generator_row_data['lifetime'] if is_valid_life_time(generator_row_data['lifetime']) else ENERGY_SOURCES[fuel_type]['life_time']
     max_inv_period: float = ENERGY_SOURCES[fuel_type]['max_growth'] if is_default_max_growth(carrier_df, generator_row_data['carrier']) else carrier_df.loc[carrier_df.index == generator_row_data['carrier'], 'max_growth'].iloc[0]
     ramping_cost: float = ENERGY_SOURCES[fuel_type]['ramping_cost'] if generator_row_data['ramping_cost'] <= 0 else generator_row_data['ramping_cost'] 
     co2_intensity: float = ENERGY_SOURCES[fuel_type]['co2_emissions'] if is_default_co2_emissions(carrier_df, generator_row_data['carrier']) else carrier_df.loc[carrier_df.index == generator_row_data['carrier'], 'co2_emissions'].iloc[0]
     is_chp: bool = is_chp_type(generator_row_data['chp_type'])
-
+    #Initialize default storage and CHP parameters
     storage_capacity = self_discharge = sto_max_charging_power = sto_charging_efficiency = 0.0
     chp_power_to_heat = chp_power_loss = chp_max_heat = 0.0
-    
+
+    #Add storage-related parameters (if Hydro or CHP)
     if (fuel_type == "Hydro" or is_chp):
             storage_capacity = get_storage_capacity(storage_unit_row_data)
             self_discharge = get_self_discharge(storage_unit_row_data)   
-            
+    #Add more storage fields for Hydro only       
     if (fuel_type == "Hydro"):
             sto_max_charging_power = get_sto_max_charging_power(storage_unit_row_data)
             sto_charging_efficiency = get_sto_charging_efficiency(storage_unit_row_data)
-        
+    #CHP-specific parameters  
     if (is_chp):
             chp_power_to_heat = generator_row_data['chp_power_to_heat'] if not (pd.isna(generator_row_data['chp_power_to_heat'])) else generator_row_data['p_nom']
             chp_power_loss = generator_row_data['chp_power_loss_factor'] if not (pd.isna(generator_row_data['chp_power_loss_factor'])) else CHP_POWER_LOSS_FACTOR_DEFAULT_VALUE
             chp_max_heat = generator_row_data['chp_max_heat'] if not (pd.isna(generator_row_data['chp_max_heat'])) else generator_row_data['p_nom']
-    
+
+    #Return the full generator data dictionary
     return {
         'unit_name': index,
         'cap_mw': generator_row_data['p_nom'],
@@ -1970,6 +2024,58 @@ def generate_row_data(index: str, generator_row_data: pd.Series, carrier_df: pd.
         'chp_max_heat': chp_max_heat  
     }
 
+
+def generate_storage_rows(n: Network) -> list[ET.Element]:
+    """
+    Generate <row> XML elements for all standalone storage units (hydro, PHS, battery, etc.)
+    in the PyPSA network. Returns a list of XML row elements.
+    """
+    storage_rows = []
+
+    # Select storage carriers of interest
+    valid_storages = n.storage_units[n.storage_units.carrier.isin(["hydro", "PHS"])]
+
+    for index, sto_row in valid_storages.iterrows():
+        fuel_type = "Hydro"
+        technology = "HDAM" if sto_row.carrier == "hydro" else "HPHS"
+        life_time = ENERGY_SOURCES[fuel_type]["life_time"]
+
+        row_elements = {
+            'unit_name': index,
+            'cap_mw': sto_row['p_nom'],
+            'fuel_type': fuel_type,
+            'decom_start_existing_cap': get_decomission_data(life_time, DECOM_START_EXISTING_CAP_DEFAULT_VALUE),
+            'life_time': life_time,
+            'decom_start_new': get_decomission_data(life_time, DECOM_START_NEW_DEFAULT_VALUE),
+            'final_life_cap': ENERGY_SOURCES[fuel_type]['final_life_cap'],
+            'max_inv_period': ENERGY_SOURCES[fuel_type]['max_growth'],
+            'cap_factor': 1,
+            'efficiency': sto_row.get('efficiency', 1.0),
+            'cost_no_fuel': 0,
+            'cap_inv_cost': sto_row.get('capital_cost', 0.0),
+            'ramping_cost': ENERGY_SOURCES[fuel_type]['ramping_cost'],
+            'co2_intensity': ENERGY_SOURCES[fuel_type]['co2_emissions'],
+            'technology': technology,
+            'ramp_up_rate': 0,
+            'ramp_down_rate': 0,
+            'primary_reserve': 'N',
+            'secondary_reserve': 'N',
+            'stab_factor': 1,
+            'chp': 'N',
+            'sto_capacity': sto_row['p_nom'] * sto_row.get('max_hours', 0),
+            'sto_self_discharge': sto_row.get('standing_loss', 0.0),
+            'sto_max_charging_power': sto_row['p_nom'],
+            'sto_charging_efficiency': STO_CHARGING_EFFICIENCY_DEFAULT_VALUE,
+            'chp_power_to_heat': 0,
+            'chp_power_loss': 0,
+            'chp_max_heat': 0,
+        }
+
+        storage_rows.append(generate_row(row_elements))
+
+    return storage_rows
+
+
 def export_to_h2res(
     n: Network,
     xml_folder_name: str | Path = "data",
@@ -1995,7 +2101,12 @@ def export_to_h2res(
         if row_elements is not None:
             row = generate_row(row_elements)
             root.append(row)
-    
+
+            # Add Hydro & PHS storages
+    for row in generate_storage_rows(n):
+        root.append(row)
+  
+
     tree = ET.ElementTree(root)
     ET.indent(tree, space="\t", level=0)
     tree.write(fn, encoding="utf-8")

@@ -15,15 +15,19 @@ ENERGY_SOURCES : Dict[str, Dict[str, Any]]= {
         "max_growth": 500,
         "ramping_cost": 0.0,
         "co2_emissions": 0.0,
+        "aliases": [
+            ["hydro", "HDAM"],
+            ["PHS", "HPHS"],
+            ["ror", "HROR"]]
     },
     "Biomass": {
-        "technology": ["ICEN", "GTUR", "STUR"],
+        "technology": ["STUR" ,"ICEN", "GTUR"],
         "final_life_cap": 0.2,
         "life_time": 20,
         "max_growth": 100,
         "ramping_cost": 0.5,
         "co2_emissions": 0.0,
-        "aliases": [['Biomass', "GTUR"]]
+        "aliases": [['Biomass', "STUR"]]
     },
     "Coal": {
         "technology": ["STUR"],
@@ -77,5 +81,17 @@ ENERGY_SOURCES : Dict[str, Dict[str, Any]]= {
         "ramping_cost": 0.0,
         "co2_emissions": 0.0,
         "aliases": ['Offwind-dc', 'Offwind-ac', 'Offwind-float', 'Onwind']
+    },
+    "Geothermal": {
+        "technology": ["STUR"],
+        "final_life_cap": 1,
+        "life_time": 100,
+        "max_growth": 100,
+        "ramping_cost": 0.0,
+        "co2_emissions": 0.0,
+        "aliases": ["Geothermal"]
     }
+
+
+    
 }
