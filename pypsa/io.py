@@ -2085,7 +2085,7 @@ def export_to_h2res(
         logger.warning(f"Directory {xml_folder_name} does not exist, creating it")
         Path(xml_folder_name).mkdir()
     
-    fn = path.joinpath('genco_data_HR_sdewes.xml')
+    fn = path.joinpath('genco_data_PyPSA.xml')
     root = ET.Element('data')
     
     # Fill NaN values with 0 for ramping limits
