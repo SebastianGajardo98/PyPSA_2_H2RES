@@ -1,9 +1,5 @@
 import pypsa
-#import matplotlib.pyplot as plt
-#plt.style.use("bmh")
-#base_s_5_elec_
-# "/Users/sebas/Downloads/test/test/networks/base_s_128_elec_.nc" test
-# "/Users/sebas/Downloads/test1/test/networks/base_s_128_elec_.nc" test1
+
 
 n = pypsa.Network('/Users/sebas/Downloads/test1/test/networks/base_s_128_elec_.nc') #test
 n.plot();
@@ -12,16 +8,6 @@ n.generators["carrier"].unique()
 n.export_to_h2res("h2res_test_folder")
 
 #########################
-
-
-########  PYPSA-EURO OUTPUT
-n = pypsa.Network('/Users/sebas/pypsa-eur/resources/networks/base_s_512_elec_.nc') #test
-n.plot();
-n.storage_units["carrier"].unique()
-n.generators["carrier"].unique()
-n.export_to_h2res("h2res_test_folder")
-
-
 
 # --- Separate carriers ---
 hydro_sto = n.storage_units[n.storage_units.carrier == "hydro"]
