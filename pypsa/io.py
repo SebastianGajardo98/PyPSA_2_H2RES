@@ -1994,7 +1994,7 @@ def generate_row_data(index: str, generator_row_data: pd.Series, carrier_df: pd.
 
     #Return the full generator data dictionary
     return {
-        'unit_name': index,
+        'unit_name': str(index).replace(" ", "_"),
         'cap_mw': generator_row_data['p_nom'],
         'fuel_type': fuel_type,
         'decom_start_existing_cap': get_decomission_data(life_time, DECOM_START_EXISTING_CAP_DEFAULT_VALUE),
@@ -2041,7 +2041,7 @@ def generate_storage_rows(n: Network) -> list[ET.Element]:
         life_time = ENERGY_SOURCES[fuel_type]["life_time"]
 
         row_elements = {
-            'unit_name': index,
+            'unit_name': str(index).replace(" ", "_"),
             'cap_mw': sto_row['p_nom'],
             'fuel_type': fuel_type,
             'decom_start_existing_cap': get_decomission_data(life_time, DECOM_START_EXISTING_CAP_DEFAULT_VALUE),

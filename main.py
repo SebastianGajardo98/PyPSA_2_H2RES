@@ -1,7 +1,7 @@
 import pypsa
 
 
-n = pypsa.Network('/Users/sebas/Downloads/test1/test/networks/base_s_128_elec_.nc') #test
+n = pypsa.Network('/Users/sebas/Downloads/base_s_39_elec.nc') #test
 n.plot();
 n.storage_units["carrier"].unique()
 n.generators["carrier"].unique()
